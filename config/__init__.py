@@ -1,1 +1,1 @@
-from .app_config import settings          # re-export convenience alias
+from config import settings, configure_logging

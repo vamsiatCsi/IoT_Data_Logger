@@ -66,7 +66,9 @@ class DataLoggingOrchestrator(ConfigurationObserver):
                             "device_ids": [d.device_id for d in lst]},
             )
             cb   = CircuitBreaker()
-            client = await cb(lambda: ProtocolFactory.create(cfg.protocol_type, cfg))  # type: ignore
+            # client = await cb(lambda: ProtocolFactory.create(cfg.protocol_type, cfg))  # type: ignore
+            client = ProtocolFactory.create(cfg.protocol_type, cfg)
+
             self.clients[proto_type] = client
             self.states[proto_type]  = StateMachine(ClientState.DISCONNECTED)
             self.cbs[proto_type]     = cb
