@@ -37,8 +37,8 @@ DOCTYPES: Dict[str, dict] = {
     "column_mapping": {
         "doctype": "Column Mapping",
         "fields": ["*"],
-        "primary_key": "select_device_id",
-        "has_children": False,
+        "primary_key": "device_id",
+        "has_children": True,
     }
 }
 
@@ -63,6 +63,7 @@ class FrappeService:
         """Fetch all objects by logical doctype name (from registry)."""
         config = DOCTYPES[logical_doctype]
         key = f"{logical_doctype}_all"
+        print(f"Fetching all {logical_doctype} from cache or Frappe")
         return await self._cached(key, lambda: self._fetch_all(config, logical_doctype))
 
     async def get_by_id(self, logical_doctype: str, value: str) -> Any:
@@ -113,10 +114,12 @@ class FrappeService:
 
     def _row_to_obj(self, logical_doctype: str, row: Dict[str, Any]) -> Any:
         # Map logical doctype key to correct model class from domain_models
+        print(f"Mapping row to object: {logical_doctype} -> {row}")
         model_lookup = {
             "device": doctype_models.Device,
             "protocol_config": doctype_models.ProtocolConfig,
             "logging_trigger": doctype_models.LoggingTrigger,
+            "column_mapping": doctype_models.ColumnMapping,
         }
         if logical_doctype not in model_lookup:
             raise ValueError(f"No model class defined for logical_doctype '{logical_doctype}'")

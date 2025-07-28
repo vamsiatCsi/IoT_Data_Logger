@@ -13,6 +13,9 @@ from src.services.frappe_service import FrappeService
 from typing import Dict, List
 from config.app_config import settings
 from src.services.device_service import DeviceProtocolMapper
+# from src.triggers import TriggerStrategyFactory
+import asyncio
+import logging
 
 
 class DataLoggingOrchestrator(ConfigurationObserver):
@@ -56,6 +59,7 @@ class DataLoggingOrchestrator(ConfigurationObserver):
                 devs_by_proto[d.protocol_type].append(d)
                 proto_used[d.protocol_type] = d.protocol_used
 
+        print(f"devices by protocol: {devs_by_proto}")
         for proto_type, lst in devs_by_proto.items():
             pcfg = await self.frappe.get_protocol_config(proto_type)
             conn = pcfg.connection_parameters

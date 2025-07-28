@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Any, Dict, List, Optional
+import json
 
 
 ###############################################################################
@@ -143,51 +144,112 @@ class ConditionTrigger:
             row_id                     = row["name"]
         )
 
-###############################################################################
-# 4. TRIGGER SET (PARENT) -----------------------------------------------------
-###############################################################################
-
 @dataclass(frozen=True, slots=True)
-class LoggingTrigger:
-    """
-    Immutable projection of the *Logging Trigger* Doctype, bundling both
-    time-based and condition-based child rows.
-    """
-    name: str
-    device_id: str
-    table_format: str                   # "Narrow" / "Wide"
-    log_on_static_interval: bool
-    static_interval: int                # Meaning depends on `update_rate_units`
-    update_rate_units: str              # "Seconds", "Minutes", …
-    log_all_items: bool
-    time_based: bool
-    condition_based: bool
-    time_based_table: List[TimeTrigger] = field(default_factory=list)
-    condition_based_table: List[ConditionTrigger] = field(default_factory=list)
+class AlwaysTrigger:
+    static_interval: int
+    update_rate_units: str
 
-    # ---------- factory --------------------------------------------------- #
     @classmethod
-    def from_row(cls, row: Dict[str, Any]) -> "LoggingTrigger":
+    def from_row(cls, row: Dict[str, Any]) -> "AlwaysTrigger":
         return cls(
-            name                  = row["name"],
-            device_id             = row["device_id"],
-            table_format          = row["table_format"],
-            log_on_static_interval= bool(row.get("log_on_static_interval", 0)),
-            static_interval       = int(row.get("static_interval", 0)),
-            update_rate_units     = row.get("update_rate_units", "Seconds"),
-            log_all_items         = bool(row.get("log_all_items", 0)),
-            time_based            = bool(row.get("time_based", 0)),
-            condition_based       = bool(row.get("condition_based", 0)),
-            time_based_table      = [
-                TimeTrigger.from_row(t) for t in row.get("time_based_table", [])
-            ],
-            condition_based_table = [
-                ConditionTrigger.from_row(c) for c in row.get("condition_based_table", [])
-            ]
+            static_interval=int(row["static_interval"]),
+            update_rate_units=row["update_rate_units"],
         )
 
 ###############################################################################
-# 5. HELPER PARSERS -----------------------------------------------------------
+# 4. TRIGGER SET (PARENT) -----------------------------------------------------
+###############################################################################
+@dataclass(frozen=True, slots=True)
+class LoggingTrigger:
+    name: str
+    device_id: str
+    table_format: str
+    log_all_items: bool
+    time_based: bool
+    condition_based: bool
+    always_trigger: bool
+
+    # Only one of the following should be populated based on trigger type
+    time_trigger: Optional[TimeTrigger] = None
+    condition_trigger: Optional[ConditionTrigger] = None
+    always_trigger_details: Optional[AlwaysTrigger] = None
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> "LoggingTrigger":
+        time_based = bool(row.get("time_based", 0))
+        condition_based = bool(row.get("condition_based", 0))
+        always_trigger = bool(row.get("always_trigger", 0))
+
+        time_trigger = (
+            TimeTrigger.from_row(row["time_based_table"][0])
+            if time_based and row.get("time_based_table")
+            else None
+        )
+        condition_trigger = (
+            ConditionTrigger.from_row(row["condition_based_table"][0])
+            if condition_based and row.get("condition_based_table")
+            else None
+        )
+        always_trigger_details = (
+            AlwaysTrigger.from_row(row["always_trigger_table"][0])
+            if always_trigger and row.get("always_trigger_table")
+            else None
+        )
+
+        return cls(
+            name=row["name"],
+            device_id=row["device_id"],
+            table_format=row["table_format"],
+            log_all_items=bool(row.get("log_all_items", 0)),
+            time_based=time_based,
+            condition_based=condition_based,
+            always_trigger=always_trigger,
+            time_trigger=time_trigger,
+            condition_trigger=condition_trigger,
+            always_trigger_details=always_trigger_details,
+        )
+    
+
+###############################################################################
+# 5. COLUMN MAPPING -----------------------------------------------------
+###############################################################################
+@dataclass(frozen=True, slots=True)
+class ColumnMapping:
+    name: str
+    owner: str
+    creation: str  # can be changed to Optional[datetime] if you parse
+    modified: str  # can be changed to Optional[datetime] if you parse
+    modified_by: str
+    docstatus: int
+    idx: int
+    device_id: Optional[str]
+    device_category: str
+    category_tag_json: Dict[str, Any]  # parsed from JSON string
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> "ColumnMapping":
+        category_tag_json = row.get("category_tag_json", "{}")
+        if isinstance(category_tag_json, str):
+            try:
+                category_tag_json = json.loads(category_tag_json)
+            except Exception:
+                category_tag_json = {}
+        return cls(
+            name=row["name"],
+            owner=row["owner"],
+            creation=row["creation"],
+            modified=row["modified"],
+            modified_by=row["modified_by"],
+            docstatus=int(row.get("docstatus", 0)),
+            idx=int(row.get("idx", 0)),
+            device_id=row.get("device_id"),
+            device_category=row.get("device_category", ""),
+            category_tag_json=category_tag_json,
+        )
+
+
+###############################################################################
+# 6. HELPER PARSERS -----------------------------------------------------------
 ###############################################################################
 
 def _parse_dt(value: Any) -> Optional[datetime]:

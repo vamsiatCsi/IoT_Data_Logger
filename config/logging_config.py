@@ -1,7 +1,7 @@
 """Rich-handler logging preset."""
 import logging
 from rich.logging import RichHandler
-from config.app_config import settings
+from .app_config import settings
 
 def configure():
     logging.basicConfig(
