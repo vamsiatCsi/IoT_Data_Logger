@@ -13,7 +13,7 @@ from src.services.frappe_service import FrappeService
 from typing import Dict, List
 from config.app_config import settings
 from src.services.device_service import DeviceProtocolMapper
-# from src.triggers import TriggerStrategyFactory
+from src.triggers import TriggerStrategyFactory
 import asyncio
 import logging
 
@@ -81,8 +81,48 @@ class DataLoggingOrchestrator(ConfigurationObserver):
             asyncio.create_task(client.start())
 
     async def _enrich_clients(self):
-        # fetch triggers + mappings and inject – implementation elided for brevity
-        pass
+        """
+        Fetch triggers and column mappings for each device, attach to each client.
+        """
+        logger = logging.getLogger("enrich_clients")
+        for proto_type, client in self.clients.items():
+            devices = getattr(client, "device_ids", [])
+            if not devices:
+                logger.warning(f"No devices attached to client {proto_type}")
+                continue
+            for device_id in devices:
+                # Fetch trigger and mapping (these should be new methods returning lists of mapped objects)
+                trigger = await self.frappe.get_logging_trigger(device_id)
+                column_mappings = await self.frappe.get_column_mapping(device_id)    # returns list of mapping objects
+                logger.debug(f"Fetched for {device_id}: trigger={trigger}, columns={column_mappings}")
+
+                if not trigger or not column_mappings:
+                    logger.warning(f"Missing trigger or column mapping for device {device_id}. Skipping enrichment.")
+                    continue
+
+                # Strategy logic
+                trigger_strategies = TriggerStrategyFactory.create_strategy(trigger)
+
+                # Attach to client. This assumes you have (or add) a per-device config API like below:
+                # For OPCUA/MQTT clients, must support: `add_device_with_mappings(device_id, column_mappings, ...)`
+                if hasattr(client, "add_device_with_mappings"):
+                    client.add_device_with_mappings(
+                        device_id, 
+                        column_mappings,   # pass full mapping list (with .tag_full_path used)
+                        trigger_strategies
+                    )
+                    logger.info(f"Device {device_id} enriched on protocol {proto_type}")
+                else:
+                    # Fallback generic storage
+                    if not hasattr(client, "_enriched_devices"):
+                        client._enriched_devices = {}
+                    client._enriched_devices[device_id] = dict(
+                        trigger_strategies=trigger_strategies,
+                        column_mappings=column_mappings
+                    )
+                    logger.info(f"Device {device_id} config stored (fallback)")
+
+        logger.info("Client enrichment complete.")
 
     async def _start_logging(self):
         # ensure clients already running; nothing to do because start() begins loop
