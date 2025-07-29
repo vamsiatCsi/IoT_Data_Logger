@@ -69,7 +69,7 @@ class ClientCreationCommand(OrchestrationCommand):
                 protocol_config = await frappe_service.get_protocol_config(protocol_type)
                 
                 # Create client using factory
-                from src.protocols.factory.protocol_factory import ProtocolFactory
+                from src.protocols.protocol_factory import ProtocolFactory
                 client = ProtocolFactory.create_client(protocol_type, protocol_config, devices)
                 
                 created_clients[protocol_type] = client

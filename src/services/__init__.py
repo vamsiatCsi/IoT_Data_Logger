@@ -2,7 +2,7 @@
 
 from .frappe_service import FrappeService
 from .device_service import DeviceProtocolMapper
-from .orchestration_service import DataLoggingOrchestrator
+from ..orchestration.orchestrator import DataLoggingOrchestrator
 from .data_logger import AsyncDataLogger
 
 __all__ = [
